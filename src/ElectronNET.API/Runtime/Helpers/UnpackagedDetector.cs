@@ -64,11 +64,20 @@
         private static bool? CheckUnpackaged2()
         {
             var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            
+            // Electron-First 打包模式：.NET 在 resources/bin 中
             if (dir.Name == "bin" && dir.Parent?.Name == "resources")
             {
                 return false;
             }
 
+            // DotNet-First 打包模式：Electron 在 electron 子目录中
+            if (dir.GetDirectories().Any(e => e.Name == "electron"))
+            {
+                return false;
+            }
+
+            // 开发模式：.electron 子目录存在
             if (dir.GetDirectories().Any(e => e.Name == ".electron"))
             {
                 return true;

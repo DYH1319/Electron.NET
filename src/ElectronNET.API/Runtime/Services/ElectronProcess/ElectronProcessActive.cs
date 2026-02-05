@@ -87,10 +87,24 @@
             }
             else
             {
-                dir = dir.Parent!.Parent!;
-                startCmd = Path.Combine(dir.FullName, this.electronBinaryName);
+                // DotNet-First 打包模式：Electron 在 electron 子目录中
+                var electronDir = Path.Combine(dir.FullName, "electron");
+                
+                if (Directory.Exists(electronDir))
+                {
+                    // 新的 DotNet-First 目录结构
+                    startCmd = Path.Combine(electronDir, this.electronBinaryName);
+                    workingDir = electronDir;
+                }
+                else
+                {
+                    // 兼容旧的 Electron-First 目录结构
+                    dir = dir.Parent!.Parent!;
+                    startCmd = Path.Combine(dir.FullName, this.electronBinaryName);
+                    workingDir = dir.FullName;
+                }
+                
                 args = $"-dotnetpacked -electronforcedport={this.socketPort:D} " + this.extraArguments;
-                workingDir = dir.FullName;
             }
 
             // We don't await this in order to let the state transition to "Starting"
