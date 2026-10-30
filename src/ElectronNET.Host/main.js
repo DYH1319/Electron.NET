@@ -269,6 +269,9 @@ function startSocketApiBridge(port) {
     io = new Server({
         pingTimeout: 60000, // in ms, default is 5000
         pingInterval: 10000, // in ms, default is 25000
+        // 默认 1MB 的单条消息上限会让大负载 IPC（如全量 Steam 游戏库快照）断开连接，
+        // 这里放宽到 64MB；契约层仍应保持分页/紧凑数据集设计
+        maxHttpBufferSize: 64 * 1024 * 1024,
     });
     io.attach(server);
 
