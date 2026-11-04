@@ -27,7 +27,8 @@
   -->
   <Target Name="ElectronCheckNoPackageJson">
 
-    <!-- Find all package.json files, excluding ElectronHostHook folder, root, and output directories -->
+    <!-- Find all package.json files, excluding ElectronHostHook folder, root, and output directories.
+         publish and Publish are both listed: on case-sensitive file systems (Linux) they are different folders. -->
     <ItemGroup>
       <_InvalidPackageJson Include="$(MSBuildProjectDirectory)\**\package.json"
                            Exclude="$(MSBuildProjectDirectory)\package.json;
@@ -35,12 +36,14 @@
                                     $(MSBuildProjectDirectory)\bin\**\package.json;
                                     $(MSBuildProjectDirectory)\obj\**\package.json;
                                     $(MSBuildProjectDirectory)\publish\**\package.json;
+                                    $(MSBuildProjectDirectory)\Publish\**\package.json;
                                     $(MSBuildProjectDirectory)\node_modules\**\package.json" />
       <_InvalidPackageLockJson Include="$(MSBuildProjectDirectory)\**\package-lock.json"
                                Exclude="$(MSBuildProjectDirectory)\ElectronHostHook\**\package-lock.json;
                                         $(MSBuildProjectDirectory)\bin\**\package-lock.json;
                                         $(MSBuildProjectDirectory)\obj\**\package-lock.json;
                                         $(MSBuildProjectDirectory)\publish\**\package-lock.json;
+                                        $(MSBuildProjectDirectory)\Publish\**\package-lock.json;
                                         $(MSBuildProjectDirectory)\node_modules\**\package-lock.json" />
     </ItemGroup>
 
@@ -144,6 +147,7 @@ For more information, see: https://github.com/ElectronNET/Electron.NET/wiki/Migr
                             Exclude="$(MSBuildProjectDirectory)\bin\**\*;
                                      $(MSBuildProjectDirectory)\obj\**\*;
                                      $(MSBuildProjectDirectory)\publish\**\*;
+                                     $(MSBuildProjectDirectory)\Publish\**\*;
                                      $(MSBuildProjectDirectory)\node_modules\**\*" />
     </ItemGroup>
 
@@ -190,6 +194,7 @@ MIGRATION REQUIRED:
                                                    $(MSBuildProjectDirectory)\bin\**\*;
                                                    $(MSBuildProjectDirectory)\obj\**\*;
                                                    $(MSBuildProjectDirectory)\publish\**\*;
+                                                   $(MSBuildProjectDirectory)\Publish\**\*;
                                                    $(MSBuildProjectDirectory)\node_modules\**\*" />
     </ItemGroup>
 

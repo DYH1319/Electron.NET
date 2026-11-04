@@ -145,6 +145,43 @@ public class MigrationChecksTargetsTests
         }
     }
 
+    [Theory]
+    [InlineData("publish")]
+    [InlineData("Publish")]
+    public async Task MigrationChecksTargets_PublishOutputInsideProject_ShouldNotBeReported(string publishFolder)
+    {
+        // A publish profile such as <PublishDir>Publish\...</PublishDir> leaves the packaged app
+        // (package.json files, node_modules, a generated electron-builder.json) inside the project.
+        // On case-sensitive file systems the exclusion must not depend on the folder's casing.
+
+        var tempDir = CreateTempProjectDirectory();
+        try
+        {
+            var output = Path.Combine(tempDir, publishFolder, "Release", "net10.0", "linux-x64");
+            Directory.CreateDirectory(Path.Combine(output, "app", "node_modules", "ws"));
+            Directory.CreateDirectory(Path.Combine(tempDir, "Properties"));
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "Properties", "electron-builder.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(output, "package.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(output, "package-lock.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(output, "app", "node_modules", "ws", "package.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(output, "electron-builder.json"), "{}");
+            await File.WriteAllTextAsync(Path.Combine(output, "electron.manifest.json"), "{}");
+
+            await WriteMinimalCsprojAsync(tempDir);
+
+            var (exitCode, buildOutput) = await RunDotnetBuildAsync(tempDir);
+
+            exitCode.Should().Be(0, $"Full build output:\n{buildOutput}");
+            buildOutput.Should().NotContain("ELECTRON001", $"Full build output:\n{buildOutput}");
+            buildOutput.Should().NotContain("ELECTRON002", $"Full build output:\n{buildOutput}");
+            buildOutput.Should().NotContain("ELECTRON004", $"Full build output:\n{buildOutput}");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
