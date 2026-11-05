@@ -1,6 +1,19 @@
 "use strict";
 const electron_1 = require("electron");
 let electronSocket;
+// The reply on `<channel>Handle` carries no correlation id, so only one invoke per channel may be
+// in flight: a second one would remove the first one's listener and steal its reply. Several
+// renderers (windows) can't coordinate that themselves, so the calls are queued here.
+// A .NET handler that throws never replies; stop waiting for it after this long.
+const HANDLE_TURN_TIMEOUT_MS = 30000;
+const handleQueues = new Map();
+function waitForTurn(previous) {
+    let timer;
+    const timeout = new Promise((resolve) => {
+        timer = setTimeout(resolve, HANDLE_TURN_TIMEOUT_MS);
+    });
+    return Promise.race([previous, timeout]).finally(() => clearTimeout(timer));
+}
 module.exports = (socket) => {
     electronSocket = socket;
     socket.on("registerIpcMainChannel", (channel) => {
@@ -48,13 +61,16 @@ module.exports = (socket) => {
     });
     socket.on("registerHandleIpcMainChannel", (channel) => {
         electron_1.ipcMain.handle(channel, (event, args) => {
-            return new Promise((resolve, _reject) => {
+            const previous = handleQueues.get(channel) ?? Promise.resolve();
+            const current = waitForTurn(previous).then(() => new Promise((resolve, _reject) => {
                 socket.removeAllListeners(channel + "Handle");
                 socket.on(channel + "Handle", (result) => {
                     resolve(result);
                 });
                 electronSocket.emit(channel, [event.preventDefault(), args]);
-            });
+            }));
+            handleQueues.set(channel, current);
+            return current;
         });
     });
     socket.on("registerHandleOnceIpcMainChannel", (channel) => {
