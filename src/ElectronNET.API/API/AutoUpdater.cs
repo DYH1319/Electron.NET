@@ -1,6 +1,7 @@
 using ElectronNET.API.Entities;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 // ReSharper disable InconsistentNaming
@@ -354,7 +355,8 @@ namespace ElectronNET.API
             var tcs = new TaskCompletionSource<string>();
             string guid = Guid.NewGuid().ToString();
 
-            BridgeConnector.Socket.Once<string>("autoUpdater-downloadUpdate-completed" + guid, tcs.SetResult);
+            // electron-updater resolves with every downloaded file, the update itself first
+            BridgeConnector.Socket.Once<string[]>("autoUpdater-downloadUpdate-completed" + guid, paths => tcs.SetResult(paths?.FirstOrDefault()));
             BridgeConnector.Socket.Emit("autoUpdater-downloadUpdate", guid);
 
             return tcs.Task;
