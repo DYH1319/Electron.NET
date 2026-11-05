@@ -690,6 +690,12 @@ module.exports = (socket, app) => {
     socket.on("browserWindowSetVibrancy", (id, type) => {
         getWindowById(id).setVibrancy(type);
     });
+    socket.on("browserWindowSetBackgroundMaterial", (id, material) => {
+        getWindowById(id).setBackgroundMaterial(material);
+    });
+    socket.on("browserWindowSetBackgroundColor", (id, color) => {
+        getWindowById(id).setBackgroundColor(color);
+    });
     socket.on("browserWindow-setBrowserView", (id, browserViewId) => {
         getWindowById(id).setBrowserView((0, browserView_1.browserViewMediateService)(browserViewId));
     });

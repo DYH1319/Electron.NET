@@ -1206,6 +1206,20 @@ public class BrowserWindow : ApiBase
     public void SetVibrancy(Vibrancy type) => this.CallMethod1(type);
 
     /// <summary>
+    /// Sets the system-drawn background material of the window.
+    /// Only supported on Windows 11 22H2 and up.
+    /// </summary>
+    /// <param name="material">Can be auto, none, mica, acrylic or tabbed.</param>
+    [SupportedOSPlatform("Windows")]
+    public void SetBackgroundMaterial(string material) => this.CallMethod1(material);
+
+    /// <summary>
+    /// Sets the background color of the window, for example #00000000 to let a background material show through.
+    /// </summary>
+    /// <param name="color">A hex, rgb, hsl or named CSS color.</param>
+    public void SetBackgroundColor(string color) => this.CallMethod1(color);
+
+    /// <summary>
     /// Render and control web pages.
     /// </summary>
     public WebContents WebContents { get; internal set; }
