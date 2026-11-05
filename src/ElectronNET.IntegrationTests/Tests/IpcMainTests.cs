@@ -33,6 +33,57 @@ namespace ElectronNET.IntegrationTests.Tests
         }
 
         [IntegrationFact]
+        public async Task Ipc_Handle_gives_each_concurrent_invoke_its_own_reply()
+        {
+            Electron.IpcMain.Handle("ipc-handle-echo", arg => "echo-" + arg);
+
+            var result = await this.MainWindow.WebContents.ExecuteJavaScriptAsync<string>(
+                "(async()=>{const {ipcRenderer}=require('electron');const r=await Promise.all(['a','b','c'].map(v=>ipcRenderer.invoke('ipc-handle-echo',v)));return r.join(',');})()");
+
+            result.Should().Be("echo-a,echo-b,echo-c");
+        }
+
+        [IntegrationFact]
+        public async Task Ipc_Handle_passes_null_results_and_arguments()
+        {
+            Electron.IpcMain.Handle("ipc-handle-null", arg => arg);
+
+            var result = await this.MainWindow.WebContents.ExecuteJavaScriptAsync<string>(
+                "(async()=>{const {ipcRenderer}=require('electron');return String(await ipcRenderer.invoke('ipc-handle-null'));})()");
+
+            result.Should().Be("null");
+        }
+
+        [IntegrationFact]
+        public async Task Ipc_Handle_rejects_when_the_listener_throws()
+        {
+            Electron.IpcMain.Handle("ipc-handle-throw", (Func<object, object>)(_ => throw new InvalidOperationException("sync failure")));
+            Electron.IpcMain.Handle("ipc-handle-throw-async", async _ =>
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("async failure");
+            });
+
+            var result = await this.MainWindow.WebContents.ExecuteJavaScriptAsync<string>(
+                "(async()=>{const {ipcRenderer}=require('electron');const r=await Promise.allSettled([ipcRenderer.invoke('ipc-handle-throw'),ipcRenderer.invoke('ipc-handle-throw-async')]);return r.map(x=>x.status+':'+x.reason.message).join('|');})()");
+
+            result.Should().Contain("rejected:").And.Contain("sync failure").And.Contain("async failure");
+        }
+
+        [IntegrationFact]
+        public async Task Ipc_Handle_failure_does_not_affect_the_next_call_on_the_channel()
+        {
+            Electron.IpcMain.Handle("ipc-handle-mixed", arg => (string)arg == "bad" ? throw new InvalidOperationException("nope") : arg);
+
+            var started = DateTime.UtcNow;
+            var result = await this.MainWindow.WebContents.ExecuteJavaScriptAsync<string>(
+                "(async()=>{const {ipcRenderer}=require('electron');const r=await Promise.allSettled(['bad','good'].map(v=>ipcRenderer.invoke('ipc-handle-mixed',v)));return r.map(x=>x.status).join(',')+':'+r[1].value;})()");
+
+            result.Should().Be("rejected,fulfilled:good");
+            (DateTime.UtcNow - started).Should().BeLessThan(TimeSpan.FromSeconds(5));
+        }
+
+        [IntegrationFact]
         public async Task Ipc_Once_only_fires_once()
         {
             var count = 0;

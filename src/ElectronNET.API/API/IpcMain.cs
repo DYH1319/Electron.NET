@@ -186,13 +186,7 @@ namespace ElectronNET.API
         /// <param name="listener">Callback Method.</param>
         public void Handle(string channel, Func<object, object> listener)
         {
-            BridgeConnector.Socket.Emit("registerHandleIpcMainChannel", channel);
-            BridgeConnector.Socket.On<JsonElement>(channel, (args) =>
-            {
-                var arg = FormatArguments(args);
-                var result = listener(arg);
-                BridgeConnector.Socket.Emit(channel + "Handle", result);
-            });
+            RegisterHandle(channel, arg => Task.FromResult(listener(arg)));
         }
 
         /// <summary>
@@ -203,16 +197,49 @@ namespace ElectronNET.API
         /// <param name="listener">Callback Method.</param>
         public void Handle(string channel, Func<object, Task<object>> listener)
         {
+            RegisterHandle(channel, listener);
+        }
+
+        private static void RegisterHandle(string channel, Func<object, Task<object>> listener)
+        {
             BridgeConnector.Socket.Emit("registerHandleIpcMainChannel", channel);
-            BridgeConnector.Socket.On<JsonElement>(channel, (args) =>
+            BridgeConnector.Socket.On<JsonElement>(channel, args => _ = RespondAsync(channel, args, listener));
+        }
+
+        /// <summary>
+        /// Answers one invoke. A listener that throws rejects the renderer's promise with the exception
+        /// message, so that message must be safe to show. If the result can't be sent the invoke is rejected
+        /// too, and the exception stays on the returned task, where it surfaces as an unobserved task exception.
+        /// </summary>
+        private static async Task RespondAsync(string channel, JsonElement args, Func<object, Task<object>> listener)
+        {
+            var requestId = args[2].GetString();
+            object result;
+            try
             {
-                Task.Run(async () =>
-                {
-                    var arg = FormatArguments(args);
-                    var result = await listener(arg);
-                    BridgeConnector.Socket.Emit(channel + "Handle", result);
-                });
-            });
+                result = await listener(FormatHandleArgument(args)).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                await BridgeConnector.Socket.Emit(channel + "HandleError", requestId, exception.Message).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                await BridgeConnector.Socket.Emit(channel + "Handle", requestId, result).ConfigureAwait(false);
+            }
+            catch
+            {
+                await BridgeConnector.Socket.Emit(channel + "HandleError", requestId, "The result could not be sent.").ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        // [event, argument, requestId]; the id is read from the raw JSON so the bridge doesn't reinterpret it
+        private static object FormatHandleArgument(JsonElement args)
+        {
+            return args[1].Deserialize<object>(BoxedObjectSerializationOptions);
         }
 
         /// <summary>

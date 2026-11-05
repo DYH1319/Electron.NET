@@ -1,12 +1,19 @@
 "use strict";
 const electron_1 = require("electron");
 let electronSocket;
-// The reply on `<channel>Handle` carries no correlation id, so only one invoke per channel may be
-// in flight: a second one would remove the first one's listener and steal its reply. Several
-// renderers (windows) can't coordinate that themselves, so the calls are queued here.
-// A .NET handler that throws never replies; stop waiting for it after this long.
+// Each invoke carries a request id that .NET sends back, so replies can't reach the wrong caller.
+// Calls on one channel still run in order, because handlers such as settings writes rely on it
+// and several renderers (windows) can't coordinate that themselves. A slow handler only holds up
+// its channel for this long; its reply still reaches its own caller.
 const HANDLE_TURN_TIMEOUT_MS = 30000;
 const handleQueues = new Map();
+const pendingInvokes = new Map();
+let lastRequestId = 0;
+function takePendingInvoke(requestId) {
+    const pending = pendingInvokes.get(requestId);
+    pendingInvokes.delete(requestId);
+    return pending;
+}
 function waitForTurn(previous) {
     let timer;
     const timeout = new Promise((resolve) => {
@@ -60,16 +67,25 @@ module.exports = (socket) => {
         }
     });
     socket.on("registerHandleIpcMainChannel", (channel) => {
+        socket.on(channel + "Handle", (requestId, result) => {
+            takePendingInvoke(requestId)?.resolve(result);
+        });
+        socket.on(channel + "HandleError", (requestId, message) => {
+            takePendingInvoke(requestId)?.reject(new Error(message));
+        });
         electron_1.ipcMain.handle(channel, (event, args) => {
             const previous = handleQueues.get(channel) ?? Promise.resolve();
-            const current = waitForTurn(previous).then(() => new Promise((resolve, _reject) => {
-                socket.removeAllListeners(channel + "Handle");
-                socket.on(channel + "Handle", (result) => {
-                    resolve(result);
-                });
-                electronSocket.emit(channel, [event.preventDefault(), args]);
+            const current = waitForTurn(previous).then(() => new Promise((resolve, reject) => {
+                const requestId = `r${++lastRequestId}`;
+                pendingInvokes.set(requestId, { resolve, reject });
+                electronSocket.emit(channel, [
+                    event.preventDefault(),
+                    args,
+                    requestId,
+                ]);
             }));
-            handleQueues.set(channel, current);
+            // A failed call only fails its own caller, not the ones queued behind it
+            handleQueues.set(channel, current.catch(() => undefined));
             return current;
         });
     });
